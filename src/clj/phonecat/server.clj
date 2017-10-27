@@ -5,8 +5,16 @@
             [compojure.handler :refer [site]]
             [compojure.coercions :refer [as-int]]
             [clojure.java.io :as io]
-            [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
-            [ring.util.response :as response]))
+            [ring.util.response :as response]
+            [cheshire.generate :as cheshire]
+            [cognitect.transit :as transit]
+            [muuntaja.core :as muuntaja]
+            [muuntaja.format.json :refer [json-format]]
+            [muuntaja.format.transit :as transit-format]
+            [muuntaja.middleware :refer [wrap-format wrap-params]])
+
+  (:import [org.joda.time ReadableInstant])
+  (:gen-class))
 
 
 (def -phone-list
@@ -19,7 +27,7 @@
 
 (defn index-page []
   {:status 200
-   :header {"Context-Type" "text/html"}
+   :headers {"Context-Type" "text/html"}
    :body   (-> "public/index.html"
                io/resource
                slurp)})
@@ -27,13 +35,11 @@
 
 (defn phone-list []
   {:status 200
-   :headers {"Content-Type" "application/json"}
    :body -phone-list})
 
 (defn phone-detail [id]
-  (println "finding phone -->" id)
+  (println "Get Phone details --" id)
   {:status 200
-   :headers {"Content-Type" "application/json"}
    :body (->> -phone-list
               (filter #(= id (:id %)))
               first)})
@@ -46,10 +52,43 @@
   (resources "/")
   (not-found "<p>Page not found</p>"))
 
+
+(def joda-time-writer
+  (transit/write-handler
+    (constantly "m")
+    (fn [v] (-> ^ReadableInstant v .getMillis))
+    (fn [v] (-> ^ReadableInstant v .getMillis .toString))))
+
+(cheshire/add-encoder
+  org.joda.time.DateTime
+  (fn [c jsonGenerator]
+    (.writeString jsonGenerator (-> ^ReadableInstant c .getMillis .toString))))
+
+(def restful-format-options
+  (update
+    muuntaja/default-options
+    :formats
+    merge
+    {"application/json"
+     json-format
+
+     "application/transit+json"
+     {:decoder [(partial transit-format/make-transit-decoder :json)]
+      :encoder [#(transit-format/make-transit-encoder
+                   :json
+                   (merge
+                     %
+                     {:handlers {org.joda.time.DateTime joda-time-writer}}))]}}))
+
+(defn wrap-formats [handler]
+  (let [wrapped (-> handler wrap-params (wrap-format restful-format-options))]
+    (fn [request]
+      ((if (:websocket? request) handler wrapped) request))))
+
+
 (def app
   (-> routes
-      (wrap-json-body {:keywords? true :bigdecimals? true})
-      wrap-json-response))
+      wrap-formats))
 
 (defn -main []
   (println "Server Started...")

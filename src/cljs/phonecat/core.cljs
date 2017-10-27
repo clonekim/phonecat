@@ -33,37 +33,36 @@
     [:h3 "Welcome to PhoneCat!"]]])
 
 
-(defn phone-item [coll]
+(defn phone-item [{:keys [id name img]}]
   [:div.col-md-3.col-xs-6
    [:div.thumbnail
-    [:img {:src (str "/img/" (get coll "img"))}]
+    [:img {:src (str "/img/" img)}]
     [:div.caption
-     [:h3 (get coll "name")]
+     [:h3 name]
      [:p.text-right
       [:a.btn.btn-default.btn-lg
-       {:href (str "/#/phone/" (get coll "id"))}
+       {:href (str "/#/phone/" id)}
        [:span.glyphicon.glyphicon-zoom-in] "Detail"]]]]])
 
 
 (defn phone-list []
   [:div.row
    (if-let [phones (:phones @state)]
-     (for [phone phones]
-       (let [id (get phone "id")]
-         ^{:key id} [phone-item phone]))
+     (for [{:keys [id] :as phone} phones]
+       ^{:key id} [phone-item phone])
      [:h3 "No phones found"])])
 
 
 (defn phone-detail []
-  (when-let [phone (:phone @state)]
+  (when-let [{:keys [id name img]} (:phone @state)]
     [:div
      [:ol.breadcrumb
       [:li [:a {:href "/#/"}       "Home"]]
       [:li [:a {:href "/#/phone"} "Phones"]]
-      [:li.active (get phone "id")]]
+      [:li.active id]]
      [:div.panel
-      [:img {:src (str "/img/" (get phone "img"))}]
-      [:p  (get phone "name")]]]))
+      [:img {:src (str "/img/" img)}]
+      [:p name]]]))
 
 
 ;;; Routes
@@ -109,5 +108,3 @@
 (defn init! []
   (hook-browser-navigation!)
   (mount-components))
-
-
